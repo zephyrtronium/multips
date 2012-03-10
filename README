@@ -1,0 +1,5 @@
+Multips is a binary patch applier designed to apply multiple patches at once. It explains any conflicts found between patches and refuses to apply patches that conflict. Its intended use is collaboration, but it is by no means thus limited.
+
+Currently, multips is a command-line only tool that can only apply only IPS patches. The future holds read/write/conversion support for an improved (yet still simple) patch format and probably a graphical user interface.
+
+For invocation help, try multips -help.

@@ -79,20 +79,20 @@ func ReadIPS(b io.Reader) (Patch, error) {
 	return nil, nil
 }
 
-func (self *ipswrite) Org() uint64 {
-	return uint64(self.start)
+func (self *ipswrite) Org() int64 {
+	return int64(self.start)
 }
 
-func (self *rlewrite) Org() uint64 {
-	return uint64(self.start)
+func (self *rlewrite) Org() int64 {
+	return int64(self.start)
 }
 
-func (self *ipswrite) Len() uint64 {
-	return uint64(len(self.data))
+func (self *ipswrite) Len() int64 {
+	return int64(len(self.data))
 }
 
-func (self *rlewrite) Len() uint64 {
-	return uint64(self.num)
+func (self *rlewrite) Len() int64 {
+	return int64(self.num)
 }
 
 func (self *ipswrite) Write(b io.WriterAt) (err error) {

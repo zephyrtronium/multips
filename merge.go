@@ -37,7 +37,7 @@ func Conflict(p1, p2 Patch) (c1, c2 []Write) {
 			end1, end2 = org1 + w1.Len(), org2 + w2.Len()
 		}
 	}
-	return
+	panic("unreachable")
 }
 
 func Merge(p1, p2 Patch) (merged Patch) {
@@ -57,5 +57,5 @@ func Merge(p1, p2 Patch) (merged Patch) {
 			}
 		}
 	}
-	return nil // unreachable
+	panic("unreachable")
 }

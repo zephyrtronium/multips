@@ -141,30 +141,36 @@ func main() {
 			}
 		}
 	}
+	patchi := -1
 	var patch Patch
 	for i := range p {
 		if !howManyFuckingVariablesDoINeed[i] {
+			patchi = i
 			patch = p[i]
+			break
 		}
 	}
-	if patch == nil {
+	if patchi < 0 {
 		log.Fatal("all patches conflict!")
 	}
-	for i, v := range p[1:] {
-		if !howManyFuckingVariablesDoINeed[i] {
-			patch = Merge(patch, v)
+	for i, v := range p {
+		if howManyFuckingVariablesDoINeed[i] {
+			fmt.Fprintf(logf, "SKIPPING %s due to conflict\n", names[i])
+			continue
+		} else if i == patchi {
+			continue
 		} else {
-			fmt.Fprintf(logf, "SKIPPING %s due to conflict\n", names[i+1])
+			patch = Merge(patch, v)
 		}
 	}
 	if pdestf != nil {
 		if err = WriteZP(pdestf, patch, metadata); err != nil {
-			fmt.Fprintf(logf, "WARNING: error writing patch to %s: %v", pdestname, err)
+			fmt.Fprintf(logf, "WARNING: error writing patch to %s: %v\n", pdestname, err)
 		}
 	}
 	if destf != nil {
 		if err = Apply(patch, destf, logf); err != nil {
-			fmt.Fprintf(logf, "ERROR applying patch to %s: %v", destname, err)
+			fmt.Fprintf(logf, "ERROR applying patch to %s: %v\n", destname, err)
 		}
 	}
 }

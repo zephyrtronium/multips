@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"io"
@@ -14,9 +12,6 @@ type zpwrite struct {
 }
 
 func ReadZP(b io.Reader) (Patch, string, error) {
-	if _, ok := b.(io.ByteReader); !ok {
-		b = bufio.NewReader(b) // do this before gob.NewDecoder() does
-	}
 	p := make([]byte, 4)
 	if n, err := b.Read(p); n < 4 || err != nil {
 		return nil, "", err
@@ -24,69 +19,72 @@ func ReadZP(b io.Reader) (Patch, string, error) {
 	if string(p) != "zp~\x7f" {
 		return nil, "", errors.New("not a ZP patch")
 	}
-	decoder := gob.NewDecoder(b)
 	metadata := ""
-	if err := decoder.Decode(&metadata); err != nil {
+	if meta, err := VLIStreamInBytes(b); err != nil {
 		return nil, "", err
+	} else {
+		metadata = string(meta)
 	}
 	var patch Patch
 	var absolute int64
+	var relative, t uint64
+	var err error
 	for {
 		write := zpwrite{}
-		var relative uint64
-		if err := decoder.Decode(&relative); err != nil {
+		if relative, err = VLIStreamIn(b); err != nil {
 			return nil, "", err
 		}
 		absolute += int64(relative)
 		write.offset = absolute
-		var length int
-		if err := decoder.Decode(&write.data); err != nil {
+		if write.data, err = VLIStreamInBytes(b); err != nil {
 			return nil, "", err
 		}
-		if err := decoder.Decode(&write.repeat); err != nil {
+		if t, err = VLIStreamIn(b); err != nil {
 			return nil, "", err
+		} else {
+			write.repeat = int64(t)
 		}
 		if relative == 0 && len(write.data) == 0 && write.repeat == 0 {
 			return patch, metadata, nil
 		}
-		write.data = make([]byte, length)
+		patch = append(patch, &write)
+		absolute += int64(write.Len())
 	}
-	return nil, "", nil // unreachable
+	panic("unreachable")
 }
 
 func WriteZP(b io.Writer, patch Patch, metadata string) (err error) {
-	encoder := gob.NewEncoder(b)
 	if _, err = b.Write([]byte("zp~\x7f")); err != nil {
 		return
 	}
-	if err = encoder.Encode(metadata); err != nil {
+	if _, err = VLIStreamOutBytes(b, []byte(metadata)); err != nil {
 		return
 	}
 	var relative int64
 	for _, write := range patch {
-		if err = encoder.Encode(uint64(write.Org()-relative)); err != nil {
+		if _, err = VLIStreamOut(b, uint64(write.Org()-relative)); err != nil {
 			return
 		}
 		switch w := write.(type) {
 		case *zpwrite:
-			if err = encoder.Encode(w.data); err != nil {
+			if _, err = VLIStreamOutBytes(b, w.data); err != nil {
 				return
 			}
-			if err = encoder.Encode(uint64(w.repeat)); err != nil {
+			if _, err = VLIStreamOut(b, uint64(w.repeat)); err != nil {
 				return
 			}
 		case *ipswrite:
-			if err = encoder.Encode(w.data); err != nil {
+			if _, err = VLIStreamOutBytes(b, w.data); err != nil {
 				return
 			}
-			if err = encoder.Encode(1); err != nil {
+			if _, err = VLIStreamOut(b, 1); err != nil {
 				return
 			}
 		case *rlewrite:
-			if err = encoder.Encode([]byte{w.data}); err != nil {
+			if _, err = VLIStreamOutBytes(b, []byte{w.data}); err != nil {
 				return
 			}
-			if err = encoder.Encode(w.num); err != nil {
+			if _, err = VLIStreamOut(b, uint64(w.num)); err != nil {
 				return
 			}
 		default:

@@ -21,7 +21,7 @@ func Apply(patch Patch, b io.WriterAt, log io.Writer) (err error) {
 		}
 	}
 	if log != nil {
-		fmt.Fprintf(log, "Patching finished.")
+		fmt.Fprintln(log, "Patching finished.")
 	}
 	return
 }

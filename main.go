@@ -4,10 +4,21 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 )
+
+func fatalf(format string, vals ...interface{}) {
+	fmt.Fprintf(os.Stderr, format, vals...)
+	os.Exit(1)
+	panic("unreachable")
+}
+
+func fatal(stuff ...interface{}) {
+	fmt.Fprintln(os.Stderr, stuff...)
+	os.Exit(1)
+	panic("unreachable")
+}
 
 func main() {
 	var destname, logname, pdestname, metadname, metadata string
@@ -24,12 +35,12 @@ func main() {
 	flag.StringVar(&metadname, "meta", "", "use contents of given file as ZP output metadata (stdin if -)")
 	flag.Parse()
 	if destname == "" && pdestname == "" {
-		log.Fatal("no target file given")
+		fatal("no target file given")
 	}
 	if destname != "" {
 		destf, err = os.OpenFile(destname, os.O_WRONLY, 0644)
 		if err != nil {
-			log.Fatalf("unable to open %s for writing: %v", destname, err)
+			fatalf("unable to open %s for writing: %v", destname, err)
 		}
 	}
 	if pdestname == "-" {
@@ -37,7 +48,7 @@ func main() {
 	} else if pdestname != "" {
 		pdestf, err = os.Create(pdestname)
 		if err != nil {
-			log.Fatalf("unable to create %s: %v", pdestname, err)
+			fatalf("unable to create %s: %v", pdestname, err)
 		}
 	}
 	if logname == "-" {
@@ -47,7 +58,7 @@ func main() {
 	} else {
 		logf, err = os.OpenFile(logname, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
-			log.Printf("unable to open %s for logging: %v\nusing stderr instead\n", logname, err)
+			fmt.Fprintf(os.Stderr, "unable to open %s for logging: %v\nusing stderr instead\n", logname, err)
 			logf = os.Stderr
 		}
 	}
@@ -66,7 +77,7 @@ func main() {
 	}
 	args := flag.Args()
 	if len(args) == 0 {
-		log.Fatal("no patches to apply")
+		fatal("no patches to apply")
 	}
 	patches := make([]Patch, len(args))
 	for i, name := range args {
@@ -126,7 +137,7 @@ func main() {
 		}
 	}
 	if len(p) == 0 {
-		log.Fatalf("no patches to apply")
+		fatalf("no patches to apply")
 	}
 	howManyFuckingVariablesDoINeed := make(map[int]bool)
 	for i := range p {
@@ -151,7 +162,7 @@ func main() {
 		}
 	}
 	if patchi < 0 {
-		log.Fatal("all patches conflict!")
+		fatal("all patches conflict!")
 	}
 	for i, v := range p {
 		if howManyFuckingVariablesDoINeed[i] {

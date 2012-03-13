@@ -8,7 +8,7 @@ import (
 
 type zpwrite struct {
 	offset, repeat int64
-	data []byte
+	data           []byte
 }
 
 func ReadZP(b io.Reader) (Patch, string, error) {
@@ -92,7 +92,7 @@ func WriteZP(b io.Writer, patch Patch, metadata string) (err error) {
 		}
 		relative = write.Org() + write.Len()
 	}
-	_, err = b.Write([]byte{0,0,0})
+	_, err = b.Write([]byte{0, 0, 0})
 	return
 }
 
@@ -110,7 +110,7 @@ func (self *zpwrite) Write(b io.WriterAt) (err error) {
 		return
 	}
 	l := self.Len()
-	if l < 1 << 20 { // just some arbitrary limit i guess
+	if l < 1<<20 { // just some arbitrary limit i guess
 		// Since the write is small, just do it all at once.
 		// This is probably suboptimal if the writerat isn't a file,
 		// but it's probably a file.
@@ -122,7 +122,7 @@ func (self *zpwrite) Write(b io.WriterAt) (err error) {
 		return
 	}
 	for i := int64(0); i < l; i += int64(len(self.data)) {
-		_, err = b.WriteAt(self.data, self.Org() + i)
+		_, err = b.WriteAt(self.data, self.Org()+i)
 		if err != nil {
 			return
 		}

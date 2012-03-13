@@ -130,7 +130,7 @@ func main() {
 	}
 	howManyFuckingVariablesDoINeed := make(map[int]bool)
 	for i := range p {
-		for j := i+1; j < len(p); j++ {
+		for j := i + 1; j < len(p); j++ {
 			if c1, c2 := Conflict(p[i], p[j]); c1 != nil {
 				fmt.Fprintf(logf, "CONFLICT between %s and %s:\n", names[i], names[j])
 				for k := range c1 {

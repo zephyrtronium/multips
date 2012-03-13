@@ -7,15 +7,15 @@ func lg(x uint64) int {
 	for i = 0; x != 0; i++ {
 		x >>= 1
 	}
-	return i-1
+	return i - 1
 }
 
 func VLIEncode(x uint64) []byte {
 	if x < 128 {
 		return []byte{byte(x)}
 	}
-	b := make([]byte, (lg(x) - 1) >> 3 + 2)
-	for i := len(b)-1; i > 0; i-- {
+	b := make([]byte, (lg(x)-1)>>3+2)
+	for i := len(b) - 1; i > 0; i-- {
 		b[i] = byte(x)
 		x >>= 8
 	}
@@ -36,7 +36,7 @@ func VLIStreamIn(b io.Reader) (x uint64, err error) {
 		x = uint64(p[0])
 		return
 	}
-	n := -int(int8(p[0]))
+	n := -int(int8(p[0])) // convert to signed, then sign-extend, then negate
 	p = make([]byte, n)
 	if _, err = b.Read(p); err != nil {
 		if err == io.EOF {
@@ -46,7 +46,7 @@ func VLIStreamIn(b io.Reader) (x uint64, err error) {
 		}
 	}
 	for _, v := range p {
-		x = x << 8 | uint64(v)
+		x = x<<8 | uint64(v)
 	}
 	return
 }

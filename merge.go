@@ -4,7 +4,7 @@ func Conflict(p1, p2 Patch) (c1, c2 []Write) {
 	i, j := 0, 0
 	w1, w2 := p1[0], p2[0]
 	org1, org2 := w1.Org(), w2.Org()
-	end1, end2 := org1 + w1.Len(), org2 + w2.Len()
+	end1, end2 := org1+w1.Len(), org2+w2.Len()
 	for {
 		if org1 >= org2 && org1 < end2 || org2 >= org1 && org2 < end1 {
 			c1 = append(c1, w1)
@@ -34,7 +34,7 @@ func Conflict(p1, p2 Patch) (c1, c2 []Write) {
 			}
 			w1, w2 = p1[i], p2[j]
 			org1, org2 = w1.Org(), w2.Org()
-			end1, end2 = org1 + w1.Len(), org2 + w2.Len()
+			end1, end2 = org1+w1.Len(), org2+w2.Len()
 		}
 	}
 	panic("unreachable")

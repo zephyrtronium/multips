@@ -8,19 +8,19 @@ import (
 
 type ipswrite struct {
 	start uint32
-	data []byte
+	data  []byte
 }
 
 type rlewrite struct {
 	start uint32
-	num uint16
-	data byte
+	num   uint16
+	data  byte
 }
 
 func add(patch Patch, write Write) Patch {
 	// The approach here is Θ(n) instead of optimal O(lg(n)), but if the
 	// patch is written in sorted order, then its actual time is constant.
-	for i := len(patch)-1; i >= 0; i-- {
+	for i := len(patch) - 1; i >= 0; i-- {
 		if patch[i].Org() < write.Org() {
 			return append(patch[:i], append(Patch{write}, patch[i:]...)...)
 		}
@@ -43,7 +43,7 @@ func ReadIPS(b io.Reader) (Patch, error) {
 		if n < 3 || err != nil && err != io.EOF {
 			return nil, err
 		}
-		org := uint32(p[0]) << 16 | uint32(p[1]) << 8 | uint32(p[2])
+		org := uint32(p[0])<<16 | uint32(p[1])<<8 | uint32(p[2])
 		if org == 0x454f46 { // EOF
 			return patch, nil
 		}
@@ -54,13 +54,13 @@ func ReadIPS(b io.Reader) (Patch, error) {
 		if n < 2 || err != nil {
 			return nil, err
 		}
-		num := uint16(p[0]) << 8 | uint16(p[1])
+		num := uint16(p[0])<<8 | uint16(p[1])
 		if num == 0 { // RLE
 			n, err = b.Read(p[:2])
 			if n < 2 || err != nil {
 				return nil, err
 			}
-			num = uint16(p[0]) << 8 | uint16(p[1])
+			num = uint16(p[0])<<8 | uint16(p[1])
 			n, err = b.Read(p[:1])
 			if n < 1 || err != nil {
 				return nil, err

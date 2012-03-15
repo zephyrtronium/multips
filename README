@@ -1,5 +1,12 @@
 Multips is a binary patch applier designed to apply multiple patches at once. It explains any conflicts found between patches and refuses to apply patches that conflict. Its intended use is collaboration, but it is by no means thus limited.
 
-Currently, multips is a command-line tool supporting reading of IPS patches and reading/merging to its custom ZP format. The future of multips holds diffing files and eventually a GUI.
+Currently, multips is a command-line tool supporting reading of IPS patches and reading/writing its custom ZP format. The future of multips includes a GUI.
 
-For invocation help, try multips -help.
+Applying a patch:
+    multips -a target.file patch.file
+Creating a patch:
+    multips -merge patch.zp old.file,new.file
+Convert IPS to ZP:
+    multips -merge patch.zp patch.ips
+
+For additional invocation help, try multips -help.

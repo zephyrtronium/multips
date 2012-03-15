@@ -1,187 +1,199 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
 )
 
+type argd struct {
+	patch          Patch
+	name, metadata string
+	conflicts      bool
+}
+
 func fatalf(format string, vals ...interface{}) {
-	fmt.Fprintf(os.Stderr, format, vals...)
+	fmt.Fprintf(os.Stderr, "FATAL: "+format, vals...)
+	fmt.Fprint(os.Stderr, "\n")
 	os.Exit(1)
 	panic("unreachable")
 }
 
 func fatal(stuff ...interface{}) {
-	fmt.Fprintln(os.Stderr, stuff...)
+	fmt.Fprintln(os.Stderr, append([]interface{}{"FATAL:"}, stuff...)...)
 	os.Exit(1)
 	panic("unreachable")
 }
 
+func readarg(patches []argd, arg string, logf *os.File) []argd {
+	var f *os.File
+	var err error
+	list := strings.Split(arg, ",") // files to be diffed are split by commas
+	if len(list) == 1 {
+		if f, err = os.Open(arg); err != nil {
+			fmt.Fprintf(logf, "WARNING: Failed to open %s: %v. SKIPPING.\n", arg, err)
+			return patches // file probably doesn't exist or user lacks read rights
+		}
+		var t Patch
+		// try IPS first because it's more common
+		if t, err = ReadIPS(f); err == BadIPS {
+			// failed to read as IPS; try ZP
+			f.Seek(0, 0)
+			var meta string
+			if t, meta, err = ReadZP(f); err == BadZP {
+				fmt.Fprintln(logf, "WARNING: Failed to read", arg, "as a patch. SKIPPING.")
+				return patches
+			} else if err != nil {
+				fmt.Fprintf(logf, "WARNING: Failed to read %s: %v. SKIPPING.\n", arg, err)
+				return patches
+			} else {
+				fmt.Fprintln(logf, "Read", arg, "as ZP.")
+				return append(patches, argd{t, arg, meta, false})
+			}
+		} else if err != nil { // IPS read failed for some reason
+			fmt.Fprintf(logf, "WARNING: Failed to read %s: %v. SKIPPING.\n", arg, err)
+			return patches
+		} else {
+			fmt.Fprintln(logf, "Read", arg, "as IPS.")
+			return append(patches, argd{t, arg, "", false})
+		}
+	} else { // multiple files to be diffed
+		var todiff []io.ByteReader
+		for _, name := range list {
+			if f, err = os.Open(name); err != nil {
+				fmt.Fprintf(logf, "WARNING: Failed to open %s: %v. SKIPPING diff of %v.\n", name, err, list)
+				return patches
+			}
+			todiff = append(todiff, bufio.NewReader(f))
+		}
+		if t, conflict, err := Diff(todiff); err != nil {
+			fmt.Fprintf(logf, "WARNING: Failed to diff %v: %v. SKIPPING.\n", list, err)
+			return patches
+		} else if conflict >= 0 {
+			fmt.Fprintf(logf, "WARNING: Diff of %v conflicts (first) at %d. SKIPPING.\n", list, conflict)
+			return patches
+		} else {
+			fmt.Fprintln(logf, "Diff of", list, "successful.")
+			return append(patches, argd{t, fmt.Sprint(list), "", false})
+		}
+	}
+	panic("unreachable")
+}
+
 func main() {
-	var destname, logname, pdestname, metadname, metadata string
-	var destf, logf, pdestf *os.File
+	var patches []argd
+	var destname, patchname, metaname, logname string
+	var metadata []byte
+	var destf, patchf, logf *os.File
 	var err error
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprintln(os.Stderr, "Remaining arguments are patches to apply.")
+		fmt.Fprintln(os.Stderr, "After these flags, arguments containing , are treated as lists of files to diff,")
+		fmt.Fprintln(os.Stderr, "with the first file being considered the old and all others the new.")
+		fmt.Fprintln(os.Stderr, "Other arguments are read as patches. IPS and ZP formats are supported.")
 	}
 	flag.StringVar(&destname, "a", "", "apply to given file")
-	flag.StringVar(&pdestname, "merge", "", "write merged patch in ZP format to given file (stdout if -)")
-	flag.StringVar(&logname, "log", "-", "log to given file (stderr if -, none if empty)")
-	flag.StringVar(&metadname, "meta", "", "use contents of given file as ZP output metadata (stdin if -)")
+	flag.StringVar(&patchname, "merge", "", "write merged patch in ZP format to given file (stdout if -)")
+	flag.StringVar(&metaname, "meta", "", "use contents of given file as ZP output metadata (stdin if -)")
+	flag.StringVar(&logname, "log", "-", "log to given file (stderr if - or empty)")
 	flag.Parse()
-	if destname == "" && pdestname == "" {
-		fatal("no target file given")
+	if destname == "" && patchname == "" {
+		fatal("no output files")
 	}
 	if destname != "" {
-		destf, err = os.OpenFile(destname, os.O_WRONLY, 0644)
-		if err != nil {
-			fatalf("unable to open %s for writing: %v", destname, err)
+		if destf, err = os.OpenFile(destname, os.O_WRONLY, 0644); err != nil {
+			fatal(err)
 		}
 	}
-	if pdestname == "-" {
-		pdestf = os.Stdout
-	} else if pdestname != "" {
-		pdestf, err = os.Create(pdestname)
-		if err != nil {
-			fatalf("unable to create %s: %v", pdestname, err)
+	if patchname != "" {
+		if patchname == "-" {
+			patchf = os.Stdout
+		} else if patchf, err = os.Create(patchname); err != nil {
+			fatal(err)
 		}
 	}
-	if logname == "-" {
+	if metaname != "" {
+		if metaname == "-" {
+			if metadata, err = ioutil.ReadAll(os.Stdin); err != nil { // can this happen?
+				fatal(err)
+			}
+		} else if metadata, err = ioutil.ReadFile(metaname); err != nil {
+			fatal(err)
+		}
+	}
+	if logname == "-" || logname == "" {
 		logf = os.Stderr
-	} else if logname == "" {
-		logf = nil
-	} else {
-		logf, err = os.OpenFile(logname, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to open %s for logging: %v\nusing stderr instead\n", logname, err)
-			logf = os.Stderr
-		}
-	}
-	if metadname == "-" {
-		m, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintln(logf, "error reading metadata from stdin:", err)
-		}
-		metadata = string(m)
-	} else if metadname != "" {
-		m, err := ioutil.ReadFile(metadname)
-		if err != nil {
-			fmt.Fprintf(logf, "error reading metadata from %s: %v\n", metadname, err)
-		}
-		metadata = string(m)
+	} else if logf, err = os.OpenFile(destname, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err != nil {
+		fatal(err)
 	}
 	args := flag.Args()
-	if len(args) == 0 {
-		fatal("no patches to apply")
+	for _, arg := range args {
+		patches = readarg(patches, arg, logf)
 	}
-	patches := make([]Patch, len(args))
-	for i, name := range args {
-		f, err := os.Open(name)
-		if err != nil {
-			fmt.Fprintf(logf, "Warning: unable to open %s for reading (%v). Skipping.\n", name, err)
-			f.Close()
-			continue
-		}
-		if strings.HasSuffix(strings.ToLower(name), ".ips") {
-			patches[i], err = ReadIPS(f)
-			if err != nil {
-				fmt.Fprintf(logf, "Warning: error while parsing %s: %v. Skipping.\n", name, err)
-			}
-		} else if strings.HasSuffix(strings.ToLower(name), ".zp") {
-			meta := ""
-			patches[i], meta, err = ReadZP(f)
-			if err != nil {
-				fmt.Fprintf(logf, "Warning: error while parsing %s: %v. Skipping.\n", name, err)
-			} else {
-				fmt.Fprintln(logf, meta)
-			}
-		} else {
-			meta := ""
-			patches[i], meta, err = ReadZP(f)
-			if err != nil {
-				fmt.Fprintf(logf, "Warning: error while parsing %s as ZP: %v. Trying IPS.\n", name, err)
-				f.Seek(0, 0)
-				patches[i], err = ReadIPS(f)
-				if err != nil {
-					fmt.Fprintf(logf, "Warning: error while parsing %s as IPS: %v. Skipping.\n", name, err)
-				}
-			} else {
-				fmt.Fprintln(logf, meta)
-			}
-		}
-		f.Close()
-	}
-	if len(patches) == 1 {
-		if pdestf != nil {
-			if err = WriteZP(pdestf, patches[0], metadata); err != nil {
-				fmt.Fprintf(logf, "WARNING: error writing patch to %s: %v", pdestname, err)
+	switch len(patches) {
+	case 0:
+		fatal("nothing to do")
+	case 1:
+		patch := patches[0]
+		if patchf != nil {
+			fmt.Fprintln(logf, "Writing patch...")
+			if err = WriteZP(patchf, patch.patch, metadata); err != nil {
+				fmt.Fprintln(logf, "ERROR writing patch:", err)
 			}
 		}
 		if destf != nil {
-			fmt.Fprintf(logf, "Applying %s to %s\n", args[0], destname)
-			Apply(patches[0], destf, logf)
-		}
-		return
-	}
-	p := make([]Patch, 0, len(patches))
-	names := make([]string, 0, len(patches))
-	for i, v := range patches {
-		if v != nil {
-			p = append(p, v)
-			names = append(names, args[i])
-		}
-	}
-	if len(p) == 0 {
-		fatalf("no patches to apply")
-	}
-	howManyFuckingVariablesDoINeed := make(map[int]bool)
-	for i := range p {
-		for j := i + 1; j < len(p); j++ {
-			if c1, c2 := Conflict(p[i], p[j]); c1 != nil {
-				fmt.Fprintf(logf, "CONFLICT between %s and %s:\n", names[i], names[j])
-				for k := range c1 {
-					fmt.Fprintf(logf, "\t%s\n\t%s\n", c1[k], c2[k])
-				}
-				howManyFuckingVariablesDoINeed[i] = true
-				howManyFuckingVariablesDoINeed[j] = true
+			fmt.Fprintln(logf, "Applying", patch.name, "to", destname)
+			if err = Apply(destf, patch.patch, logf); err != nil {
+				fmt.Fprintln(logf, "ERROR applying patch:", err)
 			}
 		}
-	}
-	patchi := -1
-	var patch Patch
-	for i := range p {
-		if !howManyFuckingVariablesDoINeed[i] {
-			patchi = i
-			patch = p[i]
-			break
+	default:
+		fmt.Fprintln(logf, "Testing for conflicts between", len(patches), "patches...")
+		// first find conflicts
+		for i := range patches {
+			fmt.Fprintln(logf, patches[i].name)
+			for j := i + 1; j < len(patches); j++ {
+				fmt.Fprint(logf, "  ", patches[j].name, ": ")
+				if c1, _ := Conflict(patches[i].patch, patches[j].patch); c1 != nil {
+					fmt.Fprintln(logf, "CONFLICT. SKIPPING.")
+					patches[i].conflicts = true
+					patches[j].conflicts = true
+				} else {
+					fmt.Fprintln(logf, "ok")
+				}
+			}
 		}
-	}
-	if patchi < 0 {
-		fatal("all patches conflict!")
-	}
-	for i, v := range p {
-		if howManyFuckingVariablesDoINeed[i] {
-			fmt.Fprintf(logf, "SKIPPING %s due to conflict\n", names[i])
-			continue
-		} else if i == patchi {
-			continue
-		} else {
-			patch = Merge(patch, v)
+		index := -1
+		for i, p := range patches {
+			if !p.conflicts {
+				index = i
+			}
 		}
-	}
-	if pdestf != nil {
-		if err = WriteZP(pdestf, patch, metadata); err != nil {
-			fmt.Fprintf(logf, "WARNING: error writing patch to %s: %v\n", pdestname, err)
+		if index < 0 {
+			fatal("all files conflict")
 		}
-	}
-	if destf != nil {
-		if err = Apply(patch, destf, logf); err != nil {
-			fmt.Fprintf(logf, "ERROR applying patch to %s: %v\n", destname, err)
+		patch := patches[index].patch
+		for i, p := range patches {
+			if !p.conflicts && i != index {
+				patch = Merge(patch, p.patch)
+			}
+		}
+		if patchf != nil {
+			fmt.Fprintln(logf, "Writing patch to", patchname)
+			if err = WriteZP(patchf, patch, metadata); err != nil {
+				fmt.Fprintln(logf, "ERROR writing patch:", err)
+			}
+		}
+		if destf != nil {
+			fmt.Fprintln(logf, "Applying patch to", destname)
+			if err = Apply(destf, patch, logf); err != nil {
+				fmt.Fprintln(logf, "ERROR applying patch:", err)
+			}
 		}
 	}
 }

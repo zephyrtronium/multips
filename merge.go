@@ -41,6 +41,9 @@ func Conflict(p1, p2 Patch) (c1, c2 []Write) {
 }
 
 func Merge(p1, p2 Patch) (merged Patch) {
+	if p1 == nil {
+		return p2
+	}
 	i, j := 0, 0
 	for {
 		if p1[i].Org() < p2[j].Org() {

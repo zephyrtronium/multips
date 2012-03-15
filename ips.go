@@ -17,6 +17,8 @@ type rlewrite struct {
 	data  byte
 }
 
+var BadIPS = errors.New("not an IPS patch")
+
 func add(patch Patch, write Write) Patch {
 	// The approach here is Θ(n) instead of optimal O(lg(n)), but if the
 	// patch is written in sorted order, then its actual time is constant.
@@ -35,7 +37,7 @@ func ReadIPS(b io.Reader) (Patch, error) {
 		return nil, err
 	}
 	if string(p[:5]) != "PATCH" {
-		return nil, errors.New("not an IPS patch")
+		return nil, BadIPS
 	}
 	patch := make(Patch, 0)
 	for {

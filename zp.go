@@ -11,13 +11,15 @@ type zpwrite struct {
 	data           []byte
 }
 
+var BadZP = errors.New("invalid ZP signature")
+
 func ReadZP(b io.Reader) (Patch, string, error) {
 	p := make([]byte, 4)
 	if n, err := b.Read(p); n < 4 || err != nil {
 		return nil, "", err
 	}
 	if string(p) != "zp~\x7f" {
-		return nil, "", errors.New("not a ZP patch")
+		return nil, "", BadZP
 	}
 	metadata := ""
 	if meta, err := VLIStreamInBytes(b); err != nil {
@@ -53,11 +55,11 @@ func ReadZP(b io.Reader) (Patch, string, error) {
 	panic("unreachable")
 }
 
-func WriteZP(b io.Writer, patch Patch, metadata string) (err error) {
+func WriteZP(b io.Writer, patch Patch, metadata []byte) (err error) {
 	if _, err = b.Write([]byte("zp~\x7f")); err != nil {
 		return
 	}
-	if _, err = VLIStreamOutBytes(b, []byte(metadata)); err != nil {
+	if _, err = VLIStreamOutBytes(b, metadata); err != nil {
 		return
 	}
 	var relative int64
@@ -73,7 +75,16 @@ func WriteZP(b io.Writer, patch Patch, metadata string) (err error) {
 			if _, err = VLIStreamOut(b, uint64(w.repeat)); err != nil {
 				return
 			}
+		case *diffwrite:
+			//TODO: optimize
+			if _, err = VLIStreamOutBytes(b, w.data); err != nil {
+				return
+			}
+			if _, err = VLIStreamOut(b, 1); err != nil {
+				return
+			}
 		case *ipswrite:
+			//TODO: optimize
 			if _, err = VLIStreamOutBytes(b, w.data); err != nil {
 				return
 			}

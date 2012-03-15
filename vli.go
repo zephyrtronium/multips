@@ -48,7 +48,7 @@ func VLIStreamIn(b io.Reader) (x uint64, err error) {
 	for _, v := range p {
 		x = x<<8 | uint64(v)
 	}
-	return
+	return //TODO: decode error if x < 128 here
 }
 
 func VLIStreamOutBytes(b io.Writer, s []byte) (int, error) {

@@ -58,6 +58,9 @@ func Diff(fs []io.ByteReader) (patch Patch, conflict int64, err error) {
 		}
 		switch len(set) {
 		case 0: // all files done
+			if diffing {
+				patch = append(patch, curdiff)
+			}
 			err = nil
 			return
 		case 1: // all files the same, except those done
